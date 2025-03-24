@@ -10,16 +10,21 @@ find_package(Python 3 COMPONENTS Interpreter Development REQUIRED)
 # Find pybind11
 # -----------------------------------------------------------------------------------------
 execute_process(
+    COMMAND "${Python_EXECUTABLE}" -c "import pybind11"
+    RESULT_VARIABLE PYBIND11_IMPORT_RESULT
+    ERROR_QUIET
+)
+
+if(NOT "${PYBIND11_IMPORT_RESULT}" STREQUAL "0")
+    message(FATAL_ERROR "pybind11 not found. Please install with 'pip install pybind11'")
+endif()
+
+execute_process(
     COMMAND "${Python_EXECUTABLE}" -c "import pybind11; print(pybind11.get_cmake_dir())"
     OUTPUT_VARIABLE PYBIND11_CMAKE_DIR
     OUTPUT_STRIP_TRAILING_WHITESPACE
     ERROR_QUIET
-    RESULT_VARIABLE PYBIND11_RESULT
 )
-
-if(NOT "${PYBIND11_RESULT}" STREQUAL "0")
-    message(FATAL_ERROR "pybind11 not found. Please install with 'pip install pybind11'")
-endif()
 
 # When looking for packages, also check in this directory where pybind11's CMake files are located
 list(APPEND CMAKE_PREFIX_PATH "${PYBIND11_CMAKE_DIR}")

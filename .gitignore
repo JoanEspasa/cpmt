@@ -31,5 +31,9 @@
 *.out
 *.app
 
+# Python virtual environment
 venv
 .venv
+
+# All build files
+build/
