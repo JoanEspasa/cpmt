@@ -57,7 +57,8 @@ def solve_complex_example():
     # Get variable names
     var_names = ['x', 'y']
     
-    # Convert clauses to string format
+    # Convert clauses to string format. We need to do it this way
+    # as smtlib2 requires us the full file
     clause_strs = [
         clause1.sexpr(),
         clause2.sexpr(),
@@ -84,8 +85,8 @@ def main():
     solve_with_z3()
     
     # Run the complex example
-    #print("\nRunning complex example (x > 3, y > x, y < 10):")
-    #solve_complex_example()
+    print("\nRunning complex example (x > 3, y > x, y < 10):")
+    solve_complex_example()
 
 if __name__ == "__main__":
     main()

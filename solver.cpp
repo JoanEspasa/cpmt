@@ -12,11 +12,10 @@ namespace py = pybind11;
 py::dict solve_from_string(const std::vector<std::string> &var_names,
                            const std::vector<std::string> &clause_strs)
 {
-    // Create a Z3 context with custom parameters
+    // Create a Z3 context 
     z3::context ctx;
     z3::params p(ctx);
     p.set("model", true); // Enable model generation
-    p.set("lemmas2console", true); // Enable model generation
 
     // Create a Z3 solver
     z3::solver solver(ctx);
@@ -25,75 +24,66 @@ py::dict solve_from_string(const std::vector<std::string> &var_names,
     py::dict result;
     result["satisfiable"] = true; // Default to true, will set to false if unsat
 
-    z3::sort_vector sorts(ctx);
-    sorts.push_back(ctx.int_sort());
-    z3::func_decl_vector decls(ctx);
-
     // The vars
     std::vector<z3::expr> vars;
-    try
+    std::vector<z3::expr> constraints;
+
+    // Z3 vectors for sorts and function declarations
+    z3::sort_vector sorts(ctx);
+    z3::func_decl_vector decls(ctx);
+
+    // Create Z3 variables to use in our solver and store their declarations
+    for (const auto &var_name : var_names)
     {
-        // Create Z3 variables to use in our solver and store their declarations
-        for (const auto &var_name : var_names)
-        {
-            z3::expr d = ctx.int_const(var_name.c_str());
-            decls.push_back(d);
-            vars.push_back(d);
-        }
-
-        // Parse each clause as a Z3 expression using the sexpr parser
-        for (const std::string &clause_str : clause_strs) {
-            z3::expr_vector clauses = ctx.parse_string(clause_str.c_str(),sorts, 0);
-            std::cout << "from: " << clause_str << " parsed: " ;
-            for (const auto  &clause : clauses) {
-                std::cout << clause.to_string() << std::endl;
-            }
+        z3::expr d = ctx.int_const(var_name.c_str());
+        vars.push_back(d);
+        decls.push_back(d.decl());
+        sorts.push_back(ctx.int_sort());
+    }
+    // Parse each clause as a Z3 expression using the sexpr parser
+    for (const std::string &clause_str : clause_strs) {
+            // need to wrap the clause in an assert as sexpr (in the python side)
+            // does not do it and parse_string expect a smtlib2 compilant string
+            std::string smt2_string = "(assert " + clause_str + ")";
+            z3::expr_vector clauses = ctx.parse_string(smt2_string.c_str(), sorts, decls);
             solver.add(clauses);
-        }
+    }
 
-        // Check if satisfiable
-        if (solver.check() == z3::sat)
+    // Check if satisfiable
+    if (solver.check() == z3::sat)
+    {
+        z3::model model = solver.get_model();
+
+        // For each variable, get its value
+        for (size_t i = 0; i < var_names.size(); i++)
         {
-            z3::model model = solver.get_model();
+            z3::expr val = model.eval(vars[i], true);
 
-            // For each variable, get its value
-            for (size_t i = 0; i < var_names.size(); i++)
+            if (val.is_numeral())
             {
-                z3::expr val = model.eval(vars[i], true);
-
-                if (val.is_numeral())
+                int int_val;
+                if (Z3_get_numeral_int(ctx, val, &int_val))
                 {
-                    int int_val;
-                    if (Z3_get_numeral_int(ctx, val, &int_val))
-                    {
-                        result[py::str(var_names[i])] = int_val;
-                    }
-                    else
-                    {
-                        // If it's a numeral that can't be converted to int, convert to string
-                        result[py::str(var_names[i])] = py::str(Z3_ast_to_string(ctx, val));
-                    }
+                    result[py::str(var_names[i])] = int_val;
                 }
                 else
                 {
-                    // Otherwise just convert to string
+                    // If it's a numeral that can't be converted to int, convert to string
                     result[py::str(var_names[i])] = py::str(Z3_ast_to_string(ctx, val));
                 }
             }
-        }
-        else
-        {
-            result["satisfiable"] = false;
+            else
+            {
+                // Otherwise just convert to string
+                result[py::str(var_names[i])] = py::str(Z3_ast_to_string(ctx, val));
+            }
         }
     }
-    catch (const z3::exception &e)
+    else
     {
-        // Handle Z3 errors
-        std::cout << "Z3 exception: " << e.msg() << std::endl;
-        result["error"] = py::str(e.msg());
         result["satisfiable"] = false;
     }
-
+    
     return result;
 }
 
